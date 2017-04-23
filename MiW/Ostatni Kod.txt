@@ -1,0 +1,393 @@
+// MiW.cpp : Defines the entry point for the console application.
+//
+#include "stdafx.h"
+#include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include <OpenNI.h>
+#include <cstdlib>
+using namespace cv;
+//#include <opencv.hpp>
+
+Mat Wain();
+typedef enum typ{ DEPTH, COLOR};
+
+struct klatka {
+	short int r, g, b;
+	int depth;
+};
+int baser, baseg, baseb;
+
+Mat GetImage(typ type) {
+	openni::OpenNI::initialize();
+	openni::Device kamerka;
+	openni::VideoStream strumien;
+	openni::VideoFrameRef klatka;
+	openni::VideoStream* pstream = NULL;
+	openni::RGB888Pixel* buffer = NULL;
+	kamerka.open(openni::ANY_DEVICE);
+	int dummy;
+	switch (type) {
+	case COLOR:
+		strumien.create(kamerka, openni::SENSOR_COLOR);
+		strumien.start();
+	
+		pstream = &strumien;
+		openni::OpenNI::waitForAnyStream(&pstream, 1, &dummy, openni::STATUS_TIME_OUT);
+		strumien.readFrame(&klatka);
+
+		buffer = (openni::RGB888Pixel*)klatka.getData();
+		break;
+	case DEPTH:
+		strumien.create(kamerka, openni::SENSOR_DEPTH);
+		strumien.start();
+	
+		pstream = &strumien;
+		openni::OpenNI::waitForAnyStream(&pstream, 1, &dummy, openni::STATUS_TIME_OUT);
+		strumien.readFrame(&klatka);
+
+		openni::DepthPixel* pixel = (openni::DepthPixel*)klatka.getData();
+
+		break;
+	}
+	Mat material;
+	material.create(klatka.getHeight(), klatka.getWidth(), CV_8UC3);
+	memcpy(material.data, buffer, 3 * klatka.getHeight()*klatka.getWidth()*sizeof(uint8_t));
+	cv::cvtColor(material, material, CV_BGR2RGB);
+
+	strumien.stop();
+	strumien.destroy();
+	klatka.release();
+	kamerka.close();
+	openni::OpenNI::shutdown();
+	
+
+
+	printf("Made it out");
+	return material;
+}
+
+void trackbar(int, void*) {
+	
+}
+
+void main() {
+	Mat src;
+	src = GetImage(COLOR);
+	namedWindow("Project Basilisk", CV_WINDOW_AUTOSIZE);
+	//cvMoveWindow("Project Basilisk", src.cols, 0);
+	imshow("Project Basilisk", src);
+	//printf("%d\n",waitKey(0));
+	//if(waitKey(0)==97)
+		while (waitKey(0) != 113) {//dopoki nie 'q'
+			src = GetImage(COLOR);//pobierz obraz
+			imshow("Project Basilisk", src);//i wyswietl
+			
+		}
+	exit(1);
+	//else src = GetImage(COLOR);
+}
+
+
+
+
+void VidInfo(klatka* tab) {
+	for (int i = 0; i < 10; i++) {
+		printf("\nFrame %d: \n\tr: %d\n\tg: %d\n\tb: %d \n\tD: %d\n", i, tab[i].r, tab[i].g, tab[i].b, tab[i].depth);
+	}
+}
+
+void somwhere() {
+	
+	//OPEN block
+	openni::Device dev1;//OPEN DEVICE
+	openni::VideoStream vs1;//OPEN STREAM
+	openni::Recorder rec1;
+	//-*-*-*-*-*-*-*-*-*-*
+
+	/*Working Blok*/
+	dev1.open(openni::ANY_DEVICE);						printf("Device Online: %d\n", dev1.isValid());
+	vs1.create(dev1, openni::SensorType::SENSOR_DEPTH); printf("Video stream: %d\n", vs1.isValid());
+	rec1.create("file.oni");
+	rec1.attach(vs1, false);							printf("Recorder online: %d\n", rec1.isValid());
+	vs1.start();
+	rec1.start();
+	Sleep(1000);										printf("Stopped wating\n");
+	rec1.stop(); vs1.stop();
+	//-*-*-*-*-*-*-*-*-*-*
+
+	//DESTROY Block
+	rec1.destroy();
+	vs1.destroy();//DESTROY DEVICE
+	dev1.close();//DESTROY STREAM
+	openni::OpenNI::shutdown();
+	//END
+}
+
+void GetDepth(klatka *&tab) {
+	openni::VideoStream stream;
+	openni::Device device;
+	openni::VideoFrameRef frame;
+	device.open(openni::ANY_DEVICE);
+	stream.create(device, openni::SENSOR_DEPTH);
+	stream.start();
+	
+	int dummy;
+	openni::VideoStream* pstream = &stream;
+	openni::OpenNI::waitForAnyStream(&pstream, 1, &dummy, openni::STATUS_TIME_OUT);
+	stream.readFrame(&frame);
+
+	openni::DepthPixel* pDepth = (openni::DepthPixel*)frame.getData();
+	for (int i = 0; i < frame.getHeight()*frame.getWidth(); i++) {
+		tab[i].depth = pDepth[i];
+	}
+	
+	
+	stream.stop();
+	stream.destroy();
+	device.close();
+
+}
+Mat Wain() {
+	openni::OpenNI::initialize();
+	openni::Device dev;
+	openni::VideoStream stream;
+	openni::VideoFrameRef frame;
+	dev.open(openni::ANY_DEVICE);
+	stream.create(dev, openni::SENSOR_COLOR);
+	stream.start();
+	
+	
+	Mat material;
+	stream.readFrame(&frame);
+	int size = frame.getWidth()*frame.getHeight();
+	klatka *tab = new klatka[frame.getWidth()*frame.getHeight()];
+	GetDepth(tab);
+
+	openni::RGB888Pixel* buffer = (openni::RGB888Pixel*)frame.getData();
+	/*for (int i = 0; i < frame.getWidth()*frame.getHeight(); i++) {
+		//if (buffer[i].g - 35>0)buffer[i].g -= 35;
+		tab[i].r = buffer[i].r;
+		tab[i].g = buffer[i].g;
+		tab[i].b = buffer[i].b;
+		buffer[i].b = 0;
+		buffer[i].g = 0;
+		
+	}*/
+	//Tworzenie materialu
+	VidInfo(tab);
+
+	material.create(frame.getHeight(), frame.getWidth(), CV_8UC3);
+	memcpy(material.data, buffer, 3 * frame.getHeight()*frame.getWidth()*sizeof(uint8_t));
+
+	cv::cvtColor(material, material, CV_BGR2RGB);
+	printf("made it here"); system("pause");
+	
+
+	///
+	/*char*tit = NULL;
+	for (int i = 0; i < 100; i++)
+	{
+		printf("Frame nr: %d\n", i);
+		stream.readFrame(&frame);
+		openni::RGB888Pixel* buffer = (openni::RGB888Pixel*)frame.getData();
+		int r = buffer[128].r;//frame.getWidth()*frame.getHeight() / 
+		int b = buffer[128].b;
+		int g = buffer[128].g;
+		
+		printf("Image size is: h:%-d\nw:%id\n", frame.getHeight(), frame.getWidth());
+		if (b > g) {
+			if (b > r)tit = "blue";
+			else tit = "green";
+		}
+		else {
+			if (r > g)tit = "red";
+			else tit = "green";
+		}
+		
+		
+		tit = "red";
+		tit = "green";
+		tit = "blue";
+		printf("b: %d\ng: %d\nR: %d\n", b, g, r);
+		printf("Middle pixel is: %s\n", tit);
+
+	}*/
+	stream.stop();
+	stream.destroy();
+
+	frame.release();
+	dev.close();
+	openni::OpenNI::shutdown();
+	return material;
+	exit(1);
+}
+int GetClosest(openni::DepthPixel *DP, openni::VideoFrameRef frame) {
+	int closest = DP[0]; int iter = 1;
+	while (true) {
+		if (closest == 0) { closest = DP[iter]; iter++; }
+		else break;
+	}
+	for (int i = 0; i < (frame.getHeight())*frame.getWidth(); i++) {
+		if (DP[i] != 0 && closest > DP[i]) { closest = DP[i]; iter = i; }
+	}
+	printf("found closest = %d\tat: %d\n", closest, iter);
+	return closest;
+}
+int dmain()
+{
+	/*FILE *plik;
+	plik = fopen("Rec.txt", "w");*/
+	int InLoop = 10;
+	openni::OpenNI::initialize();
+	Wain();
+
+	openni::Device device;
+	device.open(openni::ANY_DEVICE);
+	openni::VideoStream depth;
+	depth.create(device, openni::SENSOR_DEPTH);
+	depth.start();
+	openni::VideoFrameRef frame;
+	//while (InLoop>=0) {
+		int dummy;
+		openni::VideoStream* pstream = &depth;
+		openni::OpenNI::waitForAnyStream(&pstream, 1, &dummy, openni::STATUS_TIME_OUT);
+		depth.readFrame(&frame);
+		
+		openni::DepthPixel* pDepth = (openni::DepthPixel*)frame.getData();
+		printf("Pixel Area: %d\n", (frame.getHeight() + 1)*frame.getWidth() / 2);
+		printf("GotReading: %d\n", pDepth[38560]);
+		printf("Pixel: \nH:\t%d\nW:\t%d\n", frame.getHeight(), frame.getWidth());
+		printf("Size %d\n",frame.getDataSize());
+		//	InLoop--;
+		/*	try {
+				for (int i =240; i < 320; i++) {
+					if(pDepth[i])printf("Data in frame?:\t%d\n", pDepth[i]);
+					else {
+						ErrHandler EH;
+						EH.d = 'c'; EH.c = i; throw EH;
+					}
+				}
+			}
+			catch (ErrHandler d) { printf("Exited with c, at: %d\n",d.c); }*/
+		/*	for (int i = 0; i < frame.getHeight()*frame.getWidth(); i++) {
+				if (pDepth[i])printf("1"); else printf("0");
+			}*/
+	//}
+	/*	for (int i = 0; i < (frame.getHeight() + 1); i++) {
+		for (int j = 0; j < frame.getWidth();j++){
+			
+				//printf("frame#: %d ->\t%d\n", i, pDepth[i]);
+				fprintf(plik, "%d;", pDepth[j + (frame.getWidth() )*i]);
+			}
+		fprintf(plik, "\n");}*/
+		printf("Closest Point:\t%d", GetClosest(pDepth, frame));
+		//	fclose(plik);
+	depth.stop();
+	depth.destroy();
+	device.close();
+	
+	frame.release();
+	openni::OpenNI::shutdown();
+
+	return 0;
+}
+
+
+
+
+
+/// Global variables
+//Mat src, erosion_dst, dilation_dst;
+//
+//int erosion_elem = 0;
+//int erosion_size = 0;
+//int dilation_elem = 0;
+//int dilation_size = 0;
+//int const max_elem = 2;
+//int const max_kernel_size = 21;
+//
+///** Function Headers */
+//void Erosion(int, void*);
+//void Dilation(int, void*);
+//
+///** @function main */
+//int umain(int argc, char** argv)
+//{
+//	/// Load an image
+//	printf("we're in\n");
+//	src = Wain();
+//		//imread("autismcop.png");
+//
+//	if (!src.data)
+//	{
+//		return -1;
+//	}
+//	
+//	/// Create windows
+//	namedWindow("Erosion Demo", CV_WINDOW_AUTOSIZE);
+//	namedWindow("Dilation Demo", CV_WINDOW_AUTOSIZE);
+//	cvMoveWindow("Dilation Demo", src.cols, 0);
+//
+//	/// Create Erosion Trackbar
+//	createTrackbar("Element:\n 0: Rect \n 1: Cross \n 2: Ellipse", "Erosion Demo",
+//		&erosion_elem, max_elem,
+//		Erosion);
+//
+//	createTrackbar("Kernel size:\n 2n +1", "Erosion Demo",
+//		&erosion_size, max_kernel_size,
+//		Erosion);
+//
+//	/// Create Dilation Trackbar
+//	createTrackbar("Element:\n 0: Rect \n 1: Cross \n 2: Ellipse", "Dilation Demo",
+//		&dilation_elem, max_elem,
+//		Dilation);
+//
+//	createTrackbar("Kernel size:\n 2n +1", "Dilation Demo",
+//		&dilation_size, max_kernel_size,
+//		Dilation);
+//
+//	/// Default start
+//	Erosion(0, 0);
+//	Dilation(0, 0);
+//
+//	waitKey(0);
+//	return 0;
+//}
+//
+///**  @function Erosion  */
+//void Erosion(int, void*)
+//{
+//	int erosion_type;
+//	if (erosion_elem == 0) { erosion_type = MORPH_RECT; }
+//	else if (erosion_elem == 1) { erosion_type = MORPH_CROSS; }
+//	else if (erosion_elem == 2) { erosion_type = MORPH_ELLIPSE; }
+//
+//	Mat element = getStructuringElement(erosion_type,
+//		Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+//		Point(erosion_size, erosion_size));
+//
+//	/// Apply the erosion operation
+//	erode(src, erosion_dst, element);
+//	imshow("Erosion Demo", erosion_dst);
+//	
+//}
+//
+///** @function Dilation */
+//void Dilation(int, void*)
+//{
+//	int dilation_type;
+//	if (dilation_elem == 0) { dilation_type = MORPH_RECT; }
+//	else if (dilation_elem == 1) { dilation_type = MORPH_CROSS; }
+//	else if (dilation_elem == 2) { dilation_type = MORPH_ELLIPSE; }
+//
+//	Mat element = getStructuringElement(dilation_type,
+//		Size(2 * dilation_size + 1, 2 * dilation_size + 1),
+//		Point(dilation_size, dilation_size));
+//	/// Apply the dilation operation
+//	dilate(src, dilation_dst, element);
+//	imshow("Dilation Demo", dilation_dst);
+//}//inRange
+// dilacja i erozja 
+//segmentacja
+//fit elipse
+//findcontours

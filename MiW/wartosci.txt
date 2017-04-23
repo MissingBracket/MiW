@@ -1,0 +1,5 @@
+RED:	39 / 147
+GREEN:	0 / 11
+BLUE:	0 / 47
+erode 2
+diate 9
