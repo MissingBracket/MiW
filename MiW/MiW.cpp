@@ -260,7 +260,7 @@ void accomodate(vector<RotatedRect>InSight) {
 	}
 }
 Mat potot(VideoStream &color, VideoFrameRef colorFrame){
-/*openni::Device device;
+/*openni::Device device;hjkkjkjj
 openni::VideoStream  color;
 openni::VideoFrameRef colorFrame;
 
