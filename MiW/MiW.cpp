@@ -1,5 +1,8 @@
-// MiW.cpp : Defines the entry point for the console application.
-//
+/*EyeC
+Simple, not-so-optimal vision system
+Current blob target : red
+:>_MissingBracket
+*/
 #include "stdafx.h"
 #include "DepthRead.h"
 using namespace std;
@@ -70,6 +73,7 @@ void sprzataj(Device *D, VideoStream *VS, VideoFrameRef VFR) {
 	D->close();
 }
 void pobierzobraz() {
+	//DEBUG PURPOSE FUNCTION - WHEN ALL ELSE FAILS
 	//OpenNI::initialize();
 	Device dev;
 	VideoStream stream;
@@ -79,24 +83,19 @@ void pobierzobraz() {
 	stream.start();
 	stream.readFrame(&klatka);	
 	obraz = (RGB888Pixel*)klatka.getData();	
-	matryca.create(klatka.getHeight(), klatka.getWidth(), CV_8UC3);
-	//	memcpy(matryca.data, obraz, 3 * klatka.getHeight()*klatka.getWidth()*sizeof(uint8_t));
-	
-	memmove(matryca.data, obraz, 3 * klatka.getHeight()*klatka.getWidth()*sizeof(uint8_t));
-	 
+	matryca.create(klatka.getHeight(), klatka.getWidth(), CV_8UC3);	
+	memmove(matryca.data, obraz, 3 * klatka.getHeight()*klatka.getWidth()*sizeof(uint8_t));	 
 	cvtColor(matryca, matryca, CV_BGR2RGB);
 	Max_Size = klatka.getWidth()*klatka.getHeight();
 	stream.stop();	
 	stream.destroy();
 	dev.close();
-
-
 	//OpenNI::shutdown();
 }
 
 
 
-void editGreen(int g) {
+void editdGreen(int g) {
 	cout <<(int) obraz[g].g<<endl;
 	for (int i = 0; i < Max_Size; i++) {
 		obraz[i].g -= g;
@@ -110,19 +109,23 @@ void editGreen(int, void*) {
 }
 void editRed(int, void*) {
 	GR = min(MR - 1, GR);
-
+	setTrackbarPos("Red", "Project Basilisk", GR);
 }
 void editBlue(int, void*) {
 	GB = min(MB - 1, GB);
+	setTrackbarPos("Blue", "Project Basilisk", GB);
 }
 void editMaxB(int, void*){
 	MB = max(MB, GB + 1);
+	setTrackbarPos("MaxB", "Project Basilisk", MB);
 }
 void editMaxG(int, void*) {
 	MG = max(MG, GG + 1);
+	setTrackbarPos("MaxG", "Project Basilisk", MG);
 }
 void editMaxR(int, void*) {
 	MR = max(MR, GR + 1);
+	setTrackbarPos("MaxR", "Project Basilisk", MR);
 }
 void erode(int, void*) {
 	elementER = getStructuringElement(MORPH_CROSS,
@@ -153,6 +156,7 @@ void controlrange(bool &ison) {
 }
 
 void controls(bool isn,bool cnt,int msr, bool vrb) {
+	cout << endl << endl;
 	switch (vrb) {case 0:
 		cout << endl << endl << "\tSterowanie:\n\tq - wyjscie\n\ts - zapisz obraz\n"
 			"\tr - przelacz progowanie\n\tc - przelacz konturowanie\n"
@@ -206,8 +210,7 @@ void kontur(){
 			//cout << "Center of ellipse:\t" << (*it).center.x << "\n\t\t" << (*it).center.y << endl << endl;
 			//fprintf_s(dump, "Ellipse center:\nX:\t%f\nY:\t%f\n", (*it).center.x, (*it).center.x);
 		}
-	}
-	
+	}	
 	accomodate(minellipse);
 }
 bool mouse = false;
@@ -224,7 +227,6 @@ void odleglosc(int event, int x, int y, int flags, void*userdata) {
 bool IsBlind(vector<RotatedRect>Objects) {
 	return Objects.empty();
 }
-
 void accomodate(vector<RotatedRect>InSight) {
 	if (IsBlind(InSight)) {
 		GR--;
@@ -260,14 +262,6 @@ void accomodate(vector<RotatedRect>InSight) {
 	}
 }
 Mat potot(VideoStream &color, VideoFrameRef colorFrame){
-/*openni::Device device;hjkkjkjj
-openni::VideoStream  color;
-openni::VideoFrameRef colorFrame;
-
-auto rc = openni::OpenNI::initialize();
-rc = device.open(openni::ANY_DEVICE);
-rc = color.create(device, openni::SENSOR_COLOR);
-rc = color.start();*/
 Mat frame;
 
 	color.readFrame(&colorFrame);
@@ -281,15 +275,13 @@ Mat frame;
 	return frame;
 }
 
-void main() {
-	
-	OpenNI::initialize();
-
+void main() {	
+	auto rc = openni::OpenNI::initialize();
+	//OpenNI::initialize();
 	Device dev;
 	VideoStream stream;
 	VideoFrameRef klatka;
-
-	auto rc = openni::OpenNI::initialize();
+	
 	rc = dev.open(openni::ANY_DEVICE);
 	rc = stream.create(dev, openni::SENSOR_COLOR);
 	rc = stream.start();
@@ -308,16 +300,15 @@ void main() {
 		if (cont)kontur();
 		imshow("Project Basilisk", matryca);
 		setMouseCallback("Project Basilisk", odleglosc, NULL);
-		if (d == 's') { imwrite("pic.jpg", matryca); fprintf_s(dump, "\nImage Write to pic.jpg\n"); }
+		if (d == 's') { imwrite("pic.jpg", matryca); /*fprintf_s(dump, "\nImage Write to pic.jpg\n");*/ }
 		if (d == 'r')controlrange(ison);
 		if (d == 'v')controlrange(verbose);
 		if (d == 'c')if (ison)controlrange(cont);
-		if (d == 'h') { system("cls"); controls(ison,cont,mouse,verbose); }
+		if (d == 'h') { controls(ison,cont,mouse,verbose); }
 		if (d == 'm') { cout << "Czytanie odleglosci: " << !mouse << endl; controlrange(mouse); }
 		//if (d == 'p') { for (auto it = memory.begin(); it != memory.end(); it++) { cout << (*it)->x << "\t" << (*it)->y << endl; } }
 		matryca = potot(stream, klatka);
 	}
-
 	sprzataj(&dev, &stream, klatka);
 	//fprintf_s(dump, "\nDump closing");
 	//fclose(dump);
