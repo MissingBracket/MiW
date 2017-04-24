@@ -1,6 +1,8 @@
 /*EyeC
 Simple, not-so-optimal vision system
 Current blob target : red
+Current Platform : Windows
+Current Hardware : Asus Xtion Pro
 :>_MissingBracket
 */
 #include "stdafx.h"
@@ -34,16 +36,16 @@ void pobierz(VideoStream *VS, VideoFrameRef VFR) {
 	obraz = (RGB888Pixel*)VFR.getData();
 	matryca.create(VFR.getHeight(), VFR.getWidth(), CV_8UC3);
 	memmove(matryca.data, obraz, 3 * VFR.getHeight()*VFR.getWidth()*sizeof(uint8_t));
-	cvtColor(matryca, matryca, CV_BGR2RGB); 
+	cvtColor(matryca, matryca, CV_BGR2RGB);
 	Max_Size = VFR.getWidth()*VFR.getHeight();
 }
 void obrazglebia(Device *d, VideoStream *vs, VideoFrameRef frame) {
-	
+
 
 	VideoStream* pstream = &*vs; int dummy;
 	openni::OpenNI::waitForAnyStream(&pstream, 1, &dummy, openni::STATUS_TIME_OUT);
 	vs->readFrame(&frame);
-	
+
 
 	openni::DepthPixel* pixel = (openni::DepthPixel*)frame.getData();//uint16
 	cout << "Frame sizes \nWidth = "; cout << frame.getWidth() << endl << "Height = " << frame.getHeight() << endl;
@@ -64,7 +66,17 @@ void obrazglebia(Device *d, VideoStream *vs, VideoFrameRef frame) {
 	}
 
 }
-
+void reset_values() {
+	GR = GG = GB = 10;
+	MR = MG = MB = 255;
+	setTrackbarPos("Red", "Project Basilisk", GR);
+	setTrackbarPos("Green", "Project Basilisk", GG);
+	setTrackbarPos("Blue", "Project Basilisk", GB);
+	setTrackbarPos("MaxR", "Project Basilisk", MR);
+	setTrackbarPos("MaxG", "Project Basilisk", MG);
+	setTrackbarPos("MaxB", "Project Basilisk", MB);
+	
+}
 void sprzataj(Device *D, VideoStream *VS, VideoFrameRef VFR) {
 	VS->stop();
 	VS->destroy();
@@ -81,22 +93,19 @@ void pobierzobraz() {
 	dev.open(ANY_DEVICE);
 	stream.create(dev, SENSOR_COLOR);
 	stream.start();
-	stream.readFrame(&klatka);	
-	obraz = (RGB888Pixel*)klatka.getData();	
-	matryca.create(klatka.getHeight(), klatka.getWidth(), CV_8UC3);	
-	memmove(matryca.data, obraz, 3 * klatka.getHeight()*klatka.getWidth()*sizeof(uint8_t));	 
+	stream.readFrame(&klatka);
+	obraz = (RGB888Pixel*)klatka.getData();
+	matryca.create(klatka.getHeight(), klatka.getWidth(), CV_8UC3);
+	memmove(matryca.data, obraz, 3 * klatka.getHeight()*klatka.getWidth()*sizeof(uint8_t));
 	cvtColor(matryca, matryca, CV_BGR2RGB);
 	Max_Size = klatka.getWidth()*klatka.getHeight();
-	stream.stop();	
+	stream.stop();
 	stream.destroy();
 	dev.close();
 	//OpenNI::shutdown();
 }
-
-
-
 void editdGreen(int g) {
-	cout <<(int) obraz[g].g<<endl;
+	cout << (int)obraz[g].g << endl;
 	for (int i = 0; i < Max_Size; i++) {
 		obraz[i].g -= g;
 	}
@@ -115,7 +124,7 @@ void editBlue(int, void*) {
 	GB = min(MB - 1, GB);
 	setTrackbarPos("Blue", "Project Basilisk", GB);
 }
-void editMaxB(int, void*){
+void editMaxB(int, void*) {
 	MB = max(MB, GB + 1);
 	setTrackbarPos("MaxB", "Project Basilisk", MB);
 }
@@ -129,7 +138,7 @@ void editMaxR(int, void*) {
 }
 void erode(int, void*) {
 	elementER = getStructuringElement(MORPH_CROSS,
-		Size(2 * erozja + 1, 2 * erozja+ 1),
+		Size(2 * erozja + 1, 2 * erozja + 1),
 		Point(erozja, erozja));
 
 }
@@ -155,12 +164,13 @@ void controlrange(bool &ison) {
 	else if (!ison) { ison = true; return; }
 }
 
-void controls(bool isn,bool cnt,int msr, bool vrb) {
+void controls(bool isn, bool cnt, int msr, bool vrb) {
 	cout << endl << endl;
-	switch (vrb) {case 0:
+	switch (vrb) {
+	case 0:
 		cout << endl << endl << "\tSterowanie:\n\tq - wyjscie\n\ts - zapisz obraz\n"
 			"\tr - przelacz progowanie\n\tc - przelacz konturowanie\n"
-			"\tm - czytanie odleglosci\n"; 
+			"\tm - czytanie odleglosci\n\tk - przywroc wartosci\n\th - wypisz pomoc\n\tv - ustaw dokladnosc pomocy\n";
 		break;
 	case 1:
 		printf("\tKlawisz\tStan\tFunkcja\n");
@@ -169,38 +179,39 @@ void controls(bool isn,bool cnt,int msr, bool vrb) {
 		printf("\tr\t%d\tPrzelacz Progowanie\n", isn);
 		printf("\tc\t%d\tPrzelacz Wykrywanie\n", cnt);
 		printf("\tm\t%d\tPrzelacz czytanie odleglosci(LMB)\n", msr);
+		printf("\tk\tn/a\tReset wartosci - DEBUG\n");
 		printf("\th\tn/a\tPokaz Pomoc\n");
 		break;
 	}
-	
-		//s r c h m p
+
+	//s r c h m p
 
 }
 void accomodate(vector<RotatedRect>InSight);
-void kontur(){
+void kontur() {
 	RNG rng(12345);
 	vector<vector<Point>>kontury;
 	vector<Vec4i>hierarchy;
 	findContours(matryca, kontury, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-//	vector<RotatedRect>minrect(kontury.size());
+	//	vector<RotatedRect>minrect(kontury.size());
 	vector<RotatedRect>minellipse(kontury.size());
 	for (int i = 0; i < kontury.size(); i++) {
-//		minrect[i] = minAreaRect(Mat(kontury[i]));
+		//		minrect[i] = minAreaRect(Mat(kontury[i]));
 		if (kontury[i].size() > 5) {
 			minellipse[i] = fitEllipse(Mat(kontury[i]));
 
 		}
 	}
-	
+
 	matryca = Mat::zeros(matryca.size(), CV_8UC3);
 	for (int i = 0; i < kontury.size(); i++) {
 		Scalar kolor = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
-	//	drawContours(matryca, kontury, i, kolor, 1, 8, vector<Vec4i>(), 0, Point());
+		//	drawContours(matryca, kontury, i, kolor, 1, 8, vector<Vec4i>(), 0, Point());
 		ellipse(matryca, minellipse[i], kolor, 2, 8);
-	/*	Point2f rect_points[4]; minrect[i].points(rect_points);
-		for (int j = 0; j < 4; j++) {
-			line(matryca, rect_points[j], rect_points[(j + 1) % 4], kolor, 1, 8);
-		}*/
+		/*	Point2f rect_points[4]; minrect[i].points(rect_points);
+			for (int j = 0; j < 4; j++) {
+				line(matryca, rect_points[j], rect_points[(j + 1) % 4], kolor, 1, 8);
+			}*/
 	}
 	cout << "memory has " << minellipse.size() << endl;
 	if (!minellipse.empty()) {
@@ -210,7 +221,7 @@ void kontur(){
 			//cout << "Center of ellipse:\t" << (*it).center.x << "\n\t\t" << (*it).center.y << endl << endl;
 			//fprintf_s(dump, "Ellipse center:\nX:\t%f\nY:\t%f\n", (*it).center.x, (*it).center.x);
 		}
-	}	
+	}
 	accomodate(minellipse);
 }
 bool mouse = false;
@@ -220,7 +231,7 @@ void odleglosc(int event, int x, int y, int flags, void*userdata) {
 	case EVENT_LBUTTONDOWN:
 		printf("Pixel w pozycji:\n\tX =\t%d\n\tY =\t%d\n", x, y);
 		//fprintf_s(dump, "Depth read:\nX:\t%d\nY:\t%d\n", x, y);
-	if(mouse)	printf("odl:\t%d\n", globalread.getdepth(x,y));
+		if (mouse)	printf("odl:\t%d\n", globalread.getdepth(x, y));
 		break;
 	}
 }
@@ -261,8 +272,8 @@ void accomodate(vector<RotatedRect>InSight) {
 		}
 	}
 }
-Mat potot(VideoStream &color, VideoFrameRef colorFrame){
-Mat frame;
+Mat potot(VideoStream &color, VideoFrameRef colorFrame) {
+	Mat frame;
 
 	color.readFrame(&colorFrame);
 	const openni::RGB888Pixel* imageBuffer = (const openni::RGB888Pixel*)colorFrame.getData();
@@ -271,26 +282,24 @@ Mat frame;
 	memcpy(frame.data, imageBuffer, 3 * colorFrame.getHeight()*colorFrame.getWidth()*sizeof(uint8_t));
 
 	cv::cvtColor(frame, frame, CV_BGR2RGB); //this will put colors right
-	
+
 	return frame;
 }
 
-void main() {	
-	auto rc = openni::OpenNI::initialize();
-	//OpenNI::initialize();
+void main() {
+	auto rc = openni::OpenNI::initialize();			if (rc == STATUS_ERROR) { cout << "OpenNI Failed to Initialize!\n", exit(-1); }
 	Device dev;
 	VideoStream stream;
 	VideoFrameRef klatka;
-	
-	rc = dev.open(openni::ANY_DEVICE);
-	rc = stream.create(dev, openni::SENSOR_COLOR);
-	rc = stream.start();
-	bool ison = true; bool verbose = false,cont = false;
+	rc = dev.open(openni::ANY_DEVICE);				if (rc == STATUS_ERROR) { cout << "Failed to open device!\n", exit(-1); }
+	rc = stream.create(dev, openni::SENSOR_COLOR);	if (rc == STATUS_ERROR) { cout << "Failed to create video stream!\n", exit(-1); }
+	rc = stream.start();							if (rc == STATUS_ERROR) { cout << "Failed to start new stream!\n", exit(-1); }
+	bool ison = true; bool verbose = false, cont = false;	//Local Switches
 	matryca = potot(stream, klatka);
 	namedWindow("Project Basilisk", CV_WINDOW_AUTOSIZE);
 	imshow("Project Basilisk", matryca);
 	inittrackbars();
-	controls(ison,cont,mouse,verbose);
+	controls(ison, cont, mouse, verbose);
 	char d = 'n';
 	while (d != 'q') {
 		d = (char)waitKey(1);
@@ -304,8 +313,9 @@ void main() {
 		if (d == 'r')controlrange(ison);
 		if (d == 'v')controlrange(verbose);
 		if (d == 'c')if (ison)controlrange(cont);
-		if (d == 'h') { controls(ison,cont,mouse,verbose); }
+		if (d == 'h') { controls(ison, cont, mouse, verbose); }
 		if (d == 'm') { cout << "Czytanie odleglosci: " << !mouse << endl; controlrange(mouse); }
+		if (d == 'k') { reset_values(); }
 		//if (d == 'p') { for (auto it = memory.begin(); it != memory.end(); it++) { cout << (*it)->x << "\t" << (*it)->y << endl; } }
 		matryca = potot(stream, klatka);
 	}
@@ -321,17 +331,17 @@ void dmain() {
 	controls();
 //	fopen_s(&dump, "DumpFile.txt", "w"); fprintf_s(dump, "Dump open for analysis\n\n");
 	OpenNI::initialize();
-	
+
 	Device dev;
 	VideoStream stream;
 	VideoFrameRef klatka; globalread = DepthRead(klatka, &stream, &dev);
 	auto debug  = dev.open(ANY_DEVICE);
-	
+
 	debug = stream.create(dev, SENSOR_DEPTH);
-	
+
 	debug = stream.start();
 
-	bool ison = true; bool cont = false; 
+	bool ison = true; bool cont = false;
 	//pobierz( &stream, klatka);//pobierzobraz();
 	//obrazglebia(&dev, &stream, klatka);
 	//matryca = imread("redsmall.JPG");
