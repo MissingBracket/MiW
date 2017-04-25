@@ -263,21 +263,16 @@ Mat get_colour_image(VideoStream &color, VideoFrameRef colorFrame) {
 	return frame;
 }
 Mat get_depth_image(VideoStream *vs, VideoFrameRef frame) {
-
 	Mat depth;
 	VideoStream* pstream = &*vs; int dummy;
 	openni::OpenNI::waitForAnyStream(&pstream, 1, &dummy, openni::STATUS_TIME_OUT);
 	vs->readFrame(&frame);
 	openni::DepthPixel* pixel = (openni::DepthPixel*)frame.getData();//uint16
-	/*cout << "Frame sizes \nWidth = "; cout << frame.getWidth() << endl << "Height = " << frame.getHeight() << endl;
-	for (int i = 0; i < 450; i++) { cout << pixel[i] << "\t"; }*/
-
 	depth = Mat(CvSize(frame.getWidth(), frame.getHeight()), CV_16UC1, pixel);
 	int max = 0;
 	for (int i = 0; i < frame.getWidth() * frame.getHeight(); i++) {
 		if (pixel[i] > max) max = pixel[i];
 	}
-	//cout << endl << "max = " << max << endl;
 	depth.convertTo(depth, CV_32F);
 	float divisor = max / 255.0;
 	for (int i = 0; i < depth.rows; i++) {
@@ -289,7 +284,6 @@ Mat get_depth_image(VideoStream *vs, VideoFrameRef frame) {
 	double emax;
 	minMaxIdx(depth, &min, &emax);
 	convertScaleAbs(depth, depth, 255 / emax);
-
 	return depth;
 }
 
