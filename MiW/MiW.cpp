@@ -21,13 +21,14 @@ Mat matryca, elementER, elementDY,
 int GR = 30, GG = 30, GB = 30, Max_Size;	//Red Green Blue
 int MR = 255, MG = 255, MB = 255;			//Max color Value
 RGB888Pixel* obraz;							//Pixele
+DepthPixel *dpixel;
 const int MaxVal = 255;
 int erozja = 0, dylacja = 0;
 FILE*dump;
 DepthRead globalread;
 bool ison = true; 
 bool verbose = false, 
-cont = false,mouse = false;
+cont = false,calibrated = false;
 //+----------------------------------
 
 class MemPoint {
@@ -36,7 +37,7 @@ public:
 	float x, y, depth;
 };
 vector<MemPoint*>memory;
-
+void CalMem();
 void updatetrackbars() {
 	setTrackbarPos("Red", "Project Basilisk", GR);
 	setTrackbarPos("Green", "Project Basilisk", GG);
@@ -146,6 +147,7 @@ void controlrange(bool &ison) {
 }
 void controls() {
 	cout << endl << endl;
+	printf("The device is "); (calibrated == true ? printf("Calibrated\n") : printf("Not Calibrated\n"));
 	switch (verbose) {
 	case 0:
 		cout << endl << endl << "\tSterowanie:\n\tq - wyjscie\n\ts - zapisz obraz\n"
@@ -158,14 +160,10 @@ void controls() {
 		printf("\ts\tn/a\tZapisz do pliku\n");
 		printf("\tr\t%d\tPrzelacz Progowanie\n", ison);
 		printf("\tc\t%d\tPrzelacz Wykrywanie\n", cont);
-		printf("\tm\t%d\tPrzelacz czytanie odleglosci(LMB)\n", mouse);
 		printf("\tk\tn/a\tReset wartosci - DEBUG\n");
 		printf("\th\tn/a\tPokaz Pomoc\n");
 		break;
 	}
-
-	//s r c h m p
-
 }
 void accomodate(vector<RotatedRect>InSight);
 void kontur() {
@@ -205,15 +203,55 @@ void kontur() {
 	accomodate(minellipse);
 }
 
-
 void odleglosc(int event, int x, int y, int flags, void*userdata) {
 	switch (event) {
 	case EVENT_LBUTTONDOWN:
 		printf("Pixel w pozycji:\n\tX =\t%d\n\tY =\t%d\n", x, y);
-		//fprintf_s(dump, "Depth read:\nX:\t%d\nY:\t%d\n", x, y);
-		if (mouse)	printf("odl:\t%d\n", globalread.getdepth(x, y));
+		printf("\tDepth at point: %d\n", dpixel[x * 320 + y]);
 		break;
 	}
+}
+vector<MemPoint*>Calibrationpoints;
+void calibrate(int event, int x, int y, int flags, void*userdata) {
+	switch (event) {
+	case EVENT_LBUTTONDOWN:
+		int recX = x;
+		int recY = y;
+		int recD = dpixel[x * 320 + y];
+		printf("Data : %d\t%d\t%d\n", recX, recY, recD);
+		if (Calibrationpoints.size() < 3) {
+			Calibrationpoints.push_back(new MemPoint(recX, recY, recD));
+		}
+		
+		printf("Pixel w pozycji:\n\tX =\t%d\n\tY =\t%d\n", recX, recY);
+		printf("\tDepth at point: %d\n", recD);
+		
+		break;
+	}
+	
+}
+void ConvertCalibrationMemory(VideoStream *vs) {
+	float Out_X, Out_Y, Out_Z;
+	//CoordinateConverter::convertDepthToWorld(vs, Calibrationpoints[0]->x,Calibrationpoints[0]->y ,Calibrationpoints[0]->depth , &Out_X, &Out_Y, &Out_Z);	
+	auto status = CoordinateConverter::convertDepthToWorld(*vs, Calibrationpoints[0]->x,
+		Calibrationpoints[0]->y,
+		Calibrationpoints[0]->depth,
+		&Out_X, &Out_Y, &Out_Z);
+	cout << ":>_ Converting\n";
+	int inc = 0;
+	for (auto it = Calibrationpoints.begin(); it != Calibrationpoints.end(); ++it) {
+		cout << ":>_ Converting " << (*it)->x << '\t' << (*it)->y << '\t' << (*it)->depth << '\n';
+		auto status = CoordinateConverter::convertDepthToWorld(*vs, (*it)->x,
+			(*it)->y,
+			(*it)->depth,
+			&Out_X, &Out_Y, &Out_Z);
+		Calibrationpoints[inc]->x		= Out_X;
+		Calibrationpoints[inc]->y		= Out_Y;
+		Calibrationpoints[inc]->depth	= Out_Z;
+		inc++;
+	}
+	cout << ":>_ Converted " << Calibrationpoints.size() << " entries\n";
+	CalMem();
 }
 bool IsBlind(vector<RotatedRect>Objects) {
 	return Objects.empty();
@@ -254,8 +292,7 @@ void accomodate(vector<RotatedRect>InSight) {
 	updatetrackbars();
 }
 Mat get_colour_image(VideoStream &color, VideoFrameRef colorFrame) {
-	Mat frame;
-	color.readFrame(&colorFrame);
+	Mat frame;color.readFrame(&colorFrame);
 	const openni::RGB888Pixel* imageBuffer = (const openni::RGB888Pixel*)colorFrame.getData();
 	frame.create(colorFrame.getHeight(), colorFrame.getWidth(), CV_8UC3);
 	memcpy(frame.data, imageBuffer, 3 * colorFrame.getHeight()*colorFrame.getWidth()*sizeof(uint8_t));
@@ -267,11 +304,11 @@ Mat get_depth_image(VideoStream *vs, VideoFrameRef frame) {
 	VideoStream* pstream = &*vs; int dummy;
 	openni::OpenNI::waitForAnyStream(&pstream, 1, &dummy, openni::STATUS_TIME_OUT);
 	vs->readFrame(&frame);
-	openni::DepthPixel* pixel = (openni::DepthPixel*)frame.getData();//uint16
-	depth = Mat(CvSize(frame.getWidth(), frame.getHeight()), CV_16UC1, pixel);
+	dpixel = (openni::DepthPixel*)frame.getData();//uint16
+	depth = Mat(CvSize(frame.getWidth(), frame.getHeight()), CV_16UC1, dpixel);
 	int max = 0;
 	for (int i = 0; i < frame.getWidth() * frame.getHeight(); i++) {
-		if (pixel[i] > max) max = pixel[i];
+		if (dpixel[i] > max) max = dpixel[i];
 	}
 	depth.convertTo(depth, CV_32F);
 	float divisor = max / 255.0;
@@ -286,19 +323,73 @@ Mat get_depth_image(VideoStream *vs, VideoFrameRef frame) {
 	convertScaleAbs(depth, depth, 255 / emax);
 	return depth;
 }
+void CalMem() {
+	printf("\n\tAccessing Calibration Memory [...]\n");
+	printf("\n:>_ok\tCalibration Memory is %d in size\n", Calibrationpoints.size());
+	printf("Calibration points as follow:\n");
+	printf("Point \tX\tY\tD\n");
+
+	for (auto it = Calibrationpoints.begin(); it != Calibrationpoints.end(); ++it) {
+		cout<<"Point: "<<(*it)->x<<'\t'<<(*it)->y<<'\t' << (*it)->depth << endl;
+	}
+	printf("\n:>_ok\tCalibration Memory End\n");
+}
+
+void EyeC_Calibration(VideoStream *vs, VideoFrameRef frame) {
+	printf(":>_ Device has to be calibrated before use.\n"
+		":>_ Point three markers in prompted screen.\n");
+	namedWindow("EyeC_Calibration", CV_WINDOW_NORMAL);
+	setMouseCallback("EyeC_Calibration", calibrate, NULL);
+	Mat Cal = get_depth_image(vs, frame);
+	
+	while (!calibrated) {
+		char k = waitKey(1);
+		if(!Cal.empty()) imshow("EyeC_Calibration", Cal);
+		if (k == 'q') { exit(1); }//NEED CLEANING
+		Cal = get_depth_image(vs, frame);
+		if (Calibrationpoints.size() >= 3) {
+			CalMem();
+			printf(":>_ Are those points ok?\n"
+			":>_ yY/nN\n");
+			char agreement;
+			scanf("%c", &agreement);
+			switch (agreement) {
+			case 'y':
+			case 'Y':
+				ConvertCalibrationMemory(vs);
+				calibrated = true;
+				//Now exits calibration.
+				break;
+			case 'n':
+			case 'N':
+				for (auto it = Calibrationpoints.begin(); it != Calibrationpoints.end(); ++it)
+					delete (*it);
+				Calibrationpoints.clear();
+				EyeC_Calibration(vs,frame);
+				break;
+			default :
+				printf("well, shit");
+				break;
+			}
+		}
+	}
+}
+
 
 void main() {
+	
 	auto rc = openni::OpenNI::initialize();			if (rc == STATUS_ERROR) { cout << "OpenNI Failed to Initialize!\n", exit(-1); }
 	Device dev;
 	VideoStream stream, d_stream;
 	VideoFrameRef klatka, d_klatka;
-	rc = dev.open(openni::ANY_DEVICE);				if (rc == STATUS_ERROR) { cout << "Failed to open device!\n", exit(-1); }
-	rc = stream.create(dev, openni::SENSOR_COLOR);	if (rc == STATUS_ERROR) { cout << "Failed to create video stream!\n", exit(-1); }
-	rc = stream.start();							if (rc == STATUS_ERROR) { cout << "Failed to start new stream!\n", exit(-1); }
+	if ((rc = dev.open(openni::ANY_DEVICE)) == STATUS_ERROR) { cout << "Failed to open device!\n", exit(-1); }
+	if ((rc = stream.create(dev, openni::SENSOR_COLOR)) == STATUS_ERROR) { cout << "Failed to create video stream!\n", exit(-1); }
+	if ((rc = stream.start()) == STATUS_ERROR) { cout << "Failed to start new stream!\n", exit(-1); }
 	//***DEPTH SECTION
-	rc = d_stream.create(dev, openni::SENSOR_DEPTH);	if (rc == STATUS_ERROR) { cout << "Failed to create Depth video stream!\n", exit(-1); }
-	rc = d_stream.start();								if (rc == STATUS_ERROR) { cout << "Failed to start new Depth stream!\n", exit(-1); }
-		//Local Switches
+	if ((rc = d_stream.create(dev, openni::SENSOR_DEPTH)) == STATUS_ERROR) { cout << "Failed to create Depth video stream!\n", exit(-1); }
+	if ((rc = d_stream.start()) == STATUS_ERROR) { cout << "Failed to start new Depth stream!\n", exit(-1); }
+	EyeC_Calibration(&d_stream, d_klatka);
+	
 	matryca = get_colour_image(stream, klatka);
 	glebia = get_depth_image(&d_stream, d_klatka);
 	namedWindow("Project Basilisk", CV_WINDOW_AUTOSIZE);
@@ -308,6 +399,8 @@ void main() {
 	inittrackbars();
 	controls();
 	char d = 'n';
+	setMouseCallback("Project Basilisk", odleglosc, NULL);
+//	setMouseCallback("Project Basilisk : Depth", calibrate, NULL);
 	while (d != 'q') {
 		d = (char)waitKey(1);
 		if (ison) inRange(matryca, Scalar(GB, GG, GR), Scalar(MB, MG, MR), matryca);
@@ -316,14 +409,14 @@ void main() {
 		if (cont)kontur();
 		imshow("Project Basilisk : Depth", glebia);
 		imshow("Project Basilisk", matryca);
-		setMouseCallback("Project Basilisk", odleglosc, NULL);
 		if (d == 's') { imwrite("pic.jpg", matryca); /*fprintf_s(dump, "\nImage Write to pic.jpg\n");*/ }
 		if (d == 'r')controlrange(ison);
 		if (d == 'v')controlrange(verbose);
 		if (d == 'c')if (ison)controlrange(cont);
 		if (d == 'h') { controls(); }
-		if (d == 'm') { cout << "Czytanie odleglosci: " << !mouse << endl; controlrange(mouse); }
+		if (d == 'm') { CalMem(); }
 		if (d == 'k') { reset_values(); }
+		if (d == 'o') { ConvertCalibrationMemory(&d_stream); }
 		//if (d == 'p') { for (auto it = memory.begin(); it != memory.end(); it++) { cout << (*it)->x << "\t" << (*it)->y << endl; } }
 		glebia = get_depth_image(&d_stream, d_klatka);
 		matryca = get_colour_image(stream, klatka);
